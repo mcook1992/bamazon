@@ -1,7 +1,8 @@
 var inquirer = require("inquirer");
 var mysql = require("mysql");
+var DB = require("./databaseCode");
 var returnedArray;
-var arrayOfNames;
+var arrayOfNames = [];
 
 var selectedItem;
 
@@ -34,21 +35,24 @@ connection.connect(function(err) {
   connection.query("SELECT * FROM products", function(err, res) {
     if (err) throw err;
 
-    console.log("Welcome to Bamazon! Here's what we have in stock: ");
+    console.log("Welcome to Bamazon! Pick an item you'd like to buy");
 
     returnedArray = res;
 
     res.forEach(function(element) {
-      console.log(
-        "Item ID: " +
-          element.id +
-          "   " +
-          "Item Name: " +
-          element.product_name +
-          "   " +
-          "Price: " +
-          element.price
-      );
+      var itemName = element.product_name + " $" + element.price;
+      arrayOfNames.push(itemName);
+
+      // console.log(
+      //   "Item ID: " +
+      //     element.id +
+      //     "   " +
+      //     "Item Name: " +
+      //     element.product_name +
+      //     "   " +
+      //     "Price: " +
+      //     element.price
+      // );
     });
   });
 });
@@ -59,9 +63,11 @@ function initialInquirerCall() {
   inquirer
     .prompt([
       {
-        type: "input",
+        type: "list",
 
-        message: "Please type in the id of the item you'd like to buy",
+        message: "Please select the item you'd like to buy",
+
+        choices: arrayOfNames,
 
         name: "buyItem"
       },
@@ -74,66 +80,28 @@ function initialInquirerCall() {
       }
     ])
     .then(function(inquirerResponse) {
-      updateProduct(inquirerResponse.buyItem, inquirerResponse.quantity);
+      //taking their inquirer response and converting it to just the name
+      var usableString = inquirerResponse.buyItem.substring(
+        0,
+        inquirerResponse.buyItem.indexOf("$")
+      );
+      //trimming the string so that it matches with the names in the database
+      var newString = usableString.trim();
+
+      //making sure it's not a string object but just a string
+
+      returnedArray.forEach(function(element) {
+        if (element.product_name === newString) {
+          DB.updateProduct(
+            element.id,
+            inquirerResponse.quantity,
+            returnedArray
+          );
+        }
+      });
     });
 }
-//updating product based on the user inputs
 
-function updateProduct(id, quantity) {
-  var currentStockQuantity;
-  var totalPrice;
-
-  //keeping track of whether the user input is valid
-  var idMatchesElementinArray = false;
-
-  returnedArray.forEach(function(element) {
-    if (element.id == id) {
-      selectedItem = element;
-      totalPrice = element.price * quantity;
-      currentStockQuantity = element.stock_quantity - quantity;
-      idMatchesElementinArray = true;
-
-      // console.log(
-      //   selectedItem + "  " + currentStockQuantity + "  " + totalPrice + "  "
-      // );
-    }
-  });
-
-  if (idMatchesElementinArray == false) {
-    console.log(
-      "We're sorry. The id you typed doesn't match an item in our catalogue. Please consult the catalogue and try again"
-    );
-
-    initialInquirerCall();
-  } else if (currentStockQuantity < 0) {
-    console.log(
-      "Sorry, we do not have enough of the item in stock to complete your order. we currently only have " +
-        selectedItem.stock_quantity +
-        " number left. Please try placing another order"
-    );
-
-    initialInquirerCall();
-  } else {
-    connection.query(
-      "UPDATE products SET stock_quantity = " +
-        currentStockQuantity +
-        " WHERE id = " +
-        id,
-      // UPDATE products SET `quantity` = 100 WHERE `flavor` = 'Rocky Road'
-
-      function(err, res) {
-        if (err) {
-          console.log(err);
-        } else {
-          console.log(
-            "Congratulations! Your " +
-              totalPrice +
-              " dollar purchase was successful!"
-          );
-
-          connection.end();
-        }
-      }
-    );
-  }
-}
+module.exports = {
+  initialInquirerCall: initialInquirerCall
+};
